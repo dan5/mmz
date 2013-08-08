@@ -5,7 +5,6 @@ require 'kconv'
 
 class SendMailBot < Nadoka::NDK_Bot
   def bot_initialize
-    @cache = File.expand_path(@bot_config.fetch(:cache, '~/.rss_check'))
     @deliver_data = @bot_config.fetch(:data)
     @deliver_from = @bot_config.fetch(:from) || 'mmz@sample.com'
   end
