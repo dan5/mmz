@@ -7,6 +7,7 @@ class SendMailBot < Nadoka::NDK_Bot
   def bot_initialize
     @cache = File.expand_path(@bot_config.fetch(:cache, '~/.rss_check'))
     @deliver_data = @bot_config.fetch(:data)
+    @deliver_from = @bot_config.fetch(:from) || 'mmz@sample.com'
   end
 
   def on_privmsg prefix, ch, msg
@@ -17,19 +18,17 @@ class SendMailBot < Nadoka::NDK_Bot
       end
     end
   end
-end   
       
-def deliver_mail(_to, ch, msg)
-  mail = Mail.new do
-    from     'mmz@dgames.jp'
-    to        _to
-    body      msg
-  end
-  mail.deliver!
-end
-
-if ENV["TERM_PROGRAM"] == "Apple_Terminal"
   def deliver_mail(_to, ch, msg)
-    send_notice(ch, "to:#{_to} #{msg}")
+    if ENV["TERM_PROGRAM"] == "Apple_Terminal"
+      send_notice(ch, "to:#{_to} #{msg}")
+      return
+    end
+    mail = Mail.new do
+      from     @deliver_from
+      to       _to
+      body     msg
+    end
+    mail.deliver!
   end
-end
+end   
