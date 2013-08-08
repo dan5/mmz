@@ -1,0 +1,35 @@
+# coding: utf-8
+
+require 'mail'
+require 'kconv'
+
+class SendMailBot < Nadoka::NDK_Bot
+  def bot_initialize
+    @cache = File.expand_path(@bot_config.fetch(:cache, '~/.rss_check'))
+    @deliver_data = @bot_config.fetch(:data)
+  end
+
+  def on_privmsg prefix, ch, msg
+    @deliver_data.each do |to, values|
+      next if prefix.nick =~ values[:except]
+      unless @state.channel_users(ccn(ch)).any? {|nick| nick =~ values[:nick] }
+        deliver_mail(to, ch, msg.toutf8)
+      end
+    end
+  end
+end   
+      
+def deliver_mail(_to, ch, msg)
+  mail = Mail.new do
+    from     'mmz@dgames.jp'
+    to        _to
+    body      msg
+  end
+  mail.deliver!
+end
+
+if ENV["TERM_PROGRAM"] == "Apple_Terminal"
+  def deliver_mail(_to, ch, msg)
+    send_notice(ch, "to:#{_to} #{msg}")
+  end
+end
