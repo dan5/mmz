@@ -3,12 +3,12 @@ require 'kconv'
 
 class SendMailBot < Nadoka::NDK_Bot
   def bot_initialize
-    @deliver_data = @bot_config.fetch(:data)
+    @deliver_list = @bot_config.fetch(:list)
     @deliver_from = @bot_config.fetch(:from) || 'mmz@example.com'
   end
 
   def on_privmsg prefix, ch, msg
-    @deliver_data.each do |to, values|
+    @deliver_list.each do |to, values|
       next if prefix.nick =~ values[:except]
       unless @state.channel_users(ccn(ch)).any? {|nick| nick =~ values[:nick] }
         deliver_mail(to, ch, msg.toutf8)
