@@ -1,31 +1,75 @@
 require 'mail'
 require 'kconv'
+require 'nkf'
 
 class SendMailBot < Nadoka::NDK_Bot
   def bot_initialize
     @deliver_list = @bot_config.fetch(:list)
     @deliver_from = @bot_config.fetch(:from) || 'mmz@example.com'
+    @tm = @bot_config.fetch(:tm, 30) # min
+    pop_setting = @bot_config.fetch(:pop_setting)
+    Mail.defaults do
+      retriever_method :pop3, pop_setting
+    end
+    @message_ids = []
   end
 
   def on_privmsg prefix, ch, msg
     @deliver_list.each do |to, values|
       next if prefix.nick =~ values[:except]
       unless @state.channel_users(ccn(ch)).any? {|nick| nick =~ values[:nick] }
-        deliver_mail(to, ch, msg.toutf8)
+        deliver_mail(to, ch, prefix.nick, msg)
       end
     end
+    pop_mail
   end
       
-  def deliver_mail(_to, ch, msg)
+  def deliver_mail(_to, ch, nick, msg)
     if ENV["TERM_PROGRAM"] == "Apple_Terminal"
-      send_notice(ch, "to:#{_to} #{msg}")
+      send_notice(ch, "to:#{_to} #{nick}: #{msg}")
       return
     end
+    _from = @deliver_from
     mail = Mail.new do
-      from     @deliver_from
+      from     _from
       to       _to
-      body     msg
+      body     nick + msg.toutf8
     end
     mail.deliver!
   end
-end   
+
+  def on_timer(tm)
+    check
+  end
+
+  def check
+    pop_mail
+    #tm = Time.now
+    #if tm.to_i - @tm * 60 > @prevtm.to_i
+    #  @prevtm = tm
+    #  pop_mail
+    #end
+  end
+
+  def pop_mail
+    emails = Mail.find(:what => :last, :count => 3, :order => :asc)
+    emails.each do |mail|
+      unless @message_ids.include?(mail.message_id)
+        @message_ids.unshift mail.message_id
+        @message_ids = @message_ids.first(10)
+        text = mail.body.decoded.toutf8.gsub(/\s+\z/, "")
+        text = NKF.nkf('-j', text).force_encoding('ASCII-8BIT')
+        send_notice('#dgames', "ml: #{text}")
+
+        ch = '#dgames' # todo:
+        @deliver_list.each do |to, values|
+          next if mail.from.include?(to)
+          unless @state.channel_users(ccn(ch)).any? {|nick| nick =~ values[:nick] }
+            deliver_mail(to, ch, "nick", text)
+          end
+        end
+
+      end
+    end
+  end
+end
