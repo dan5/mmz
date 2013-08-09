@@ -59,7 +59,8 @@ class SendMailBot < Nadoka::NDK_Bot
         @message_ids = @message_ids.first(10)
         text = mail.body.decoded.toutf8.gsub(/\s+\z/, "")
         text = NKF.nkf('-j', text).force_encoding('ASCII-8BIT')
-        send_notice('#dgames', "ml: #{text}")
+        _text = text.gsub(/\s/, ' ')
+        send_notice('#dgames', "ml: #{_text}")
 
         ch = '#dgames' # todo:
         @deliver_list.each do |to, values|
