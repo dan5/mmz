@@ -4,9 +4,11 @@ require 'nkf'
 
 class SendMailBot < Nadoka::NDK_Bot
   def bot_initialize
+    @channel = @bot_config.fetch(:channel)
+    @ch_debug = @bot_config.fetch(:channel_debug)
     @deliver_list = @bot_config.fetch(:list)
     @deliver_from = @bot_config.fetch(:from) || 'mmz@example.com'
-    @tm = @bot_config.fetch(:tm, 30) # min
+    @tm = @bot_config.fetch(:tm, 5) # min
     pop_setting = @bot_config.fetch(:pop_setting)
     Mail.defaults do
       retriever_method :pop3, pop_setting
@@ -17,60 +19,85 @@ class SendMailBot < Nadoka::NDK_Bot
   def on_privmsg prefix, ch, msg
     @deliver_list.each do |to, values|
       next if prefix.nick =~ values[:except]
-      unless @state.channel_users(ccn(ch)).any? {|nick| nick =~ values[:nick] }
-        deliver_mail(to, ch, prefix.nick, msg)
+      unless nick_exist? ch, values[:nick]
+        deliver_mail(to, prefix.nick, msg)
       end
     end
-    pop_mail
+    pop_mail ch
   end
       
-  def deliver_mail(_to, ch, nick, msg)
+  def deliver_mail _to, nick, msg
+    text = nick_msg nick, msg
     if ENV["TERM_PROGRAM"] == "Apple_Terminal"
-      send_notice(ch, "to:#{_to} #{nick}: #{msg}")
+      debug_notice("debug: to:#{_to} #{text}")
       return
     end
     _from = @deliver_from
     mail = Mail.new do
       from     _from
       to       _to
-      body     nick + msg.toutf8
+      body     text.toutf8
     end
     mail.deliver!
   end
 
-  def on_timer(tm)
-    check
+  def on_timer tm
+    check("#dgames") # todo
   end
 
-  def check
-    pop_mail
-    #tm = Time.now
-    #if tm.to_i - @tm * 60 > @prevtm.to_i
-    #  @prevtm = tm
-    #  pop_mail
-    #end
+  def check ch
+    tm = Time.now
+    if tm.to_i - @tm * 60 > @prevtm.to_i
+      @prevtm = tm
+      pop_mail ch
+    end
   end
 
-  def pop_mail
+  def pop_mail ch
+    debug_notice("debug: pop_mail")
     emails = Mail.find(:what => :last, :count => 3, :order => :asc)
     emails.each do |mail|
       unless @message_ids.include?(mail.message_id)
         @message_ids.unshift mail.message_id
         @message_ids = @message_ids.first(10)
-        text = mail.body.decoded.toutf8.gsub(/\s+\z/, "")
-        text = NKF.nkf('-j', text).force_encoding('ASCII-8BIT')
-        _text = text.gsub(/\s/, ' ')
-        send_notice('#dgames', "ml: #{_text}")
 
-        ch = '#dgames' # todo:
+        from = mail.from.first
+        nick = @deliver_list.fetch(from, :nick => from).fetch(:nick)
+        text = safe_body(mail)
+
+        # post notice
+        _send_notice ch, nick, text
+
+        # post mail
         @deliver_list.each do |to, values|
           next if mail.from.include?(to)
-          unless @state.channel_users(ccn(ch)).any? {|nick| nick =~ values[:nick] }
-            deliver_mail(to, ch, "nick", text)
+          unless nick_exist? ch, values[:nick]
+            deliver_mail(to, nick, text)
           end
         end
-
       end
     end
+  end
+
+  def nick_exist? ch, nick
+    @state.channel_users(ccn(ch)).any? {|e| e =~ /\A#{nick}/ }
+  end
+
+  def safe_body mail
+    body = mail.body.decoded.toutf8.gsub(/\s+\z/, "")
+    NKF.nkf('-j', body).force_encoding('ASCII-8BIT')
+  end
+
+  def nick_msg nick, text
+    "#{nick}: #{text}"
+  end
+
+  def _send_notice ch, nick, text
+    _text = text.gsub(/\s/, ' ')
+    send_notice(ch, nick_msg(nick, _text))
+  end
+
+  def debug_notice msg
+    send_notice(@ch_debug, msg) if @ch_debug
   end
 end
