@@ -14,6 +14,36 @@ class SendMailBot < Nadoka::NDK_Bot
       retriever_method :pop3, pop_setting
     end
     @message_ids = []
+    @count = 0
+    create_thread 1
+  end
+
+  def check_start t
+    puts "check_start #{t}"
+    @check_loop_count = 0
+    if @check_times.nil? or @check_times <= 0
+      create_thread t
+    else
+      @check_times = t if t > @check_times
+    end
+  end
+
+  def create_thread t
+    if $sendmailbot_th && $sendmailbot_th.alive?
+      puts "kill thread ----------"
+      $sendmailbot_th.kill
+    end
+    $sendmailbot_th = Thread.new do
+      puts "create thread ----------"
+      @check_times = t
+      while @check_times > 0
+        puts @check_times
+        pop_mail @channel
+        @check_times -= 1
+        @check_loop_count += 1
+        sleep 1 + @check_loop_count / 5
+      end
+    end
   end
 
   def on_privmsg prefix, ch, msg
@@ -23,7 +53,6 @@ class SendMailBot < Nadoka::NDK_Bot
         deliver_mail(to, prefix.nick, msg)
       end
     end
-    pop_mail ch
   end
       
   def deliver_mail _to, nick, msg
@@ -42,22 +71,24 @@ class SendMailBot < Nadoka::NDK_Bot
   end
 
   def on_timer tm
-    check("#dgames") # todo
+    check @channel
   end
 
   def check ch
     tm = Time.now
     if tm.to_i - @tm * 60 > @prevtm.to_i
       @prevtm = tm
-      pop_mail ch
+      check_start 1
     end
   end
 
   def pop_mail ch
     debug_notice("debug: pop_mail")
+    mail_is_exist = false
     emails = Mail.find(:what => :last, :count => 3, :order => :asc)
     emails.each do |mail|
       unless @message_ids.include?(mail.message_id)
+        mail_is_exist = true
         @message_ids.unshift mail.message_id
         @message_ids = @message_ids.first(10)
 
@@ -77,6 +108,7 @@ class SendMailBot < Nadoka::NDK_Bot
         end
       end
     end
+    check_start 100 if mail_is_exist
   end
 
   def nick_exist? ch, nick
