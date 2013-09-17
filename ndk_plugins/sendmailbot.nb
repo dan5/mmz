@@ -7,8 +7,10 @@ class SendMailBot < Nadoka::NDK_Bot
     @channel = @bot_config.fetch(:channel)
     @ch_debug = @bot_config.fetch(:channel_debug)
     @deliver_list = @bot_config.fetch(:list)
-    @deliver_from = @bot_config.fetch(:from) || 'mmz@example.com'
+    @deliver_from = @bot_config.fetch(:from, 'mmz@example.com')
+    @deliver_include_body = @bot_config.fetch(:include_body, false)
     @tm = @bot_config.fetch(:tm, 5) # min
+    @pop_check_times = @bot_config.fetch(:pop_check_times, 20)
     pop_setting = @bot_config.fetch(:pop_setting)
     Mail.defaults do
       retriever_method :pop3, pop_setting
@@ -19,7 +21,7 @@ class SendMailBot < Nadoka::NDK_Bot
   end
 
   def check_start t
-    puts "check_start #{t}"
+    debug_notice "check_start #{t}"
     @check_loop_count = 0
     if @check_times.nil? or @check_times <= 0
       create_thread t
@@ -47,15 +49,19 @@ class SendMailBot < Nadoka::NDK_Bot
   end
 
   def on_privmsg prefix, ch, msg
+    mail_is_send = false
     @deliver_list.each do |to, values|
       next if prefix.nick =~ values[:except]
       unless nick_exist? ch, values[:nick]
         deliver_mail(to, prefix.nick, msg)
+        mail_is_send = true
       end
     end
+    check_start @pop_check_times if mail_is_send
   end
       
   def deliver_mail _to, nick, msg
+    msg = "" unless @deliver_include_body
     text = nick_msg nick, msg
     if ENV["TERM_PROGRAM"] == "Apple_Terminal"
       debug_notice("debug: to:#{_to} #{text}")
@@ -108,7 +114,7 @@ class SendMailBot < Nadoka::NDK_Bot
         end
       end
     end
-    check_start 100 if mail_is_exist
+    check_start @pop_check_times if mail_is_exist
   end
 
   def nick_exist? ch, nick
