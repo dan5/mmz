@@ -5,10 +5,9 @@ require 'nkf'
 class SendMailBot < Nadoka::NDK_Bot
   def bot_initialize
     @channel = @bot_config.fetch(:channel)
-    @ch_debug = @bot_config.fetch(:channel_debug)
+    @ch_debug = @bot_config.fetch(:channel_debug, nil)
     @deliver_list = @bot_config.fetch(:list)
     @deliver_from = @bot_config.fetch(:from, 'mmz@example.com')
-    @deliver_include_body = @bot_config.fetch(:include_body, false)
     @tm = @bot_config.fetch(:tm, 5) # min
     @pop_check_times = @bot_config.fetch(:pop_check_times, 20)
     pop_setting = @bot_config.fetch(:pop_setting)
@@ -53,7 +52,7 @@ class SendMailBot < Nadoka::NDK_Bot
     @deliver_list.each do |to, values|
       next if prefix.nick =~ values[:except]
       unless nick_exist? ch, values[:nick]
-        deliver_mail(to, prefix.nick, msg)
+        deliver_mail(to, prefix.nick, values[:include_body] ? msg : "")
         mail_is_send = true
       end
     end
@@ -61,7 +60,6 @@ class SendMailBot < Nadoka::NDK_Bot
   end
       
   def deliver_mail _to, nick, msg
-    msg = "" unless @deliver_include_body
     text = nick_msg nick, msg
     if ENV["TERM_PROGRAM"] == "Apple_Terminal"
       debug_notice("debug: to:#{_to} #{text}")
@@ -109,7 +107,7 @@ class SendMailBot < Nadoka::NDK_Bot
         @deliver_list.each do |to, values|
           next if mail.from.include?(to)
           unless nick_exist? ch, values[:nick]
-            deliver_mail(to, nick, text)
+            deliver_mail(to, nick, values[:include_body] ? text : "")
           end
         end
       end
