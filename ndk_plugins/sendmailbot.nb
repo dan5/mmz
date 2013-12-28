@@ -52,7 +52,7 @@ class SendMailBot < Nadoka::NDK_Bot
     @deliver_list.each do |to, values|
       next if prefix.nick =~ values[:except]
       unless nick_exist? ch, values[:nick]
-        deliver_mail(to, prefix.nick, values[:include_body] ? msg : "")
+        deliver_mail(to, values[:from_nick] || prefix.nick, values[:include_body] ? msg : "")
         mail_is_send = true
       end
     end
@@ -107,7 +107,7 @@ class SendMailBot < Nadoka::NDK_Bot
         @deliver_list.each do |to, values|
           next if mail.from.include?(to)
           unless nick_exist? ch, values[:nick]
-            deliver_mail(to, nick, values[:include_body] ? text : "")
+            deliver_mail(to, values[:from_nick] || nick, values[:include_body] ? text : "")
           end
         end
       end
